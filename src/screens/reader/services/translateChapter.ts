@@ -2,10 +2,8 @@ import { MMKVStorage } from '@utils/mmkv/mmkv';
 
 export const CHAPTER_TRANSLATIONS = 'CHAPTER_TRANSLATIONS';
 
-const MYMEMORY_API = 'https://api.mymemory.translated.net/get';
-
-/** Maximum words per MyMemory request. Chunks are joined with \n\n. */
-const MAX_WORDS_PER_CHUNK = 450;
+// Google Translate unofficial API (free, no API key needed)
+const GOOGLE_TRANSLATE_URL = 'https://translate.googleapis.com/translate_a/single';
 
 /**
  * Strip HTML tags and decode common HTML entities.
@@ -50,70 +48,49 @@ export function wrapInParagraphs(text: string): string {
 }
 
 /**
- * Split text into chunks of approximately MAX_WORDS_PER_CHUNK words.
+ * Translate text using Google Translate API (free unofficial endpoint)
+ * @param text - Text to translate
+ * @param fromLang - Source language (default: 'en')
+ * @param toLang - Target language (default: 'id')
  */
-function splitIntoChunks(text: string): string[] {
-  const words = text.split(/\s+/);
-  const chunks: string[] = [];
-  let current: string[] = [];
-  let count = 0;
+export async function translateText(
+  text: string,
+  fromLang: string = 'en',
+  toLang: string = 'id',
+): Promise<string> {
+  try {
+    const url = `${GOOGLE_TRANSLATE_URL}?client=gtx&sl=${fromLang}&tl=${toLang}&dt=t&q=${encodeURIComponent(text)}`;
 
-  for (const word of words) {
-    current.push(word);
-    count++;
-    if (count >= MAX_WORDS_PER_CHUNK) {
-      chunks.push(current.join(' '));
-      current = [];
-      count = 0;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+
+    const data = await response.json() as any;
+
+    // Google Translate returns array of arrays: [[translated_text, src_text, confidence], ...]
+    // Each element is [translated_text, original, null, null]
+    if (data && data[0]) {
+      let translatedText = '';
+      for (const segment of data[0]) {
+        if (segment[0]) {
+          translatedText += segment[0];
+        }
+      }
+      return translatedText || text;
+    }
+
+    return text;
+  } catch (error) {
+    console.warn('[Translate] Error:', error);
+    throw error;
   }
-  if (current.length > 0) {
-    chunks.push(current.join(' '));
-  }
-  return chunks;
-}
-
-interface MyMemoryResponse {
-  responseStatus: number;
-  responseData: {
-    translatedText: string;
-  };
-}
-
-/**
- * Translate a single chunk via MyMemory API.
- */
-async function translateChunk(text: string): Promise<string> {
-  const url = `${MYMEMORY_API}?q=${encodeURIComponent(text)}&langpair=en|id`;
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
-
-  if (!response.ok) {
-    throw new Error(`MyMemory HTTP ${response.status}`);
-  }
-
-  const data = (await response.json()) as MyMemoryResponse;
-
-  if (data.responseStatus !== 200) {
-    throw new Error(`MyMemory status ${data.responseStatus}`);
-  }
-
-  return data.responseData.translatedText;
-}
-
-/**
- * Translate plain text (en → id) using MyMemory, chunking long content.
- * Returns translated text with preserved paragraph structure.
- */
-export async function translateText(text: string): Promise<string> {
-  const chunks = splitIntoChunks(text);
-
-  // Translate chunks in parallel for better performance
-  const results = await Promise.all(chunks.map(translateChunk));
-
-  return results.join('\n\n');
 }
 
 /**
@@ -141,7 +118,7 @@ export function cacheTranslation(chapterId: number, html: string): void {
     cache[chapterId] = html;
     MMKVStorage.set(CHAPTER_TRANSLATIONS, JSON.stringify(cache));
   } catch {
-    // Silently fail — translation caching is non-critical.
+    // Silently fail
   }
 }
 

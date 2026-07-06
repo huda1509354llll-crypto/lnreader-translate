@@ -65,7 +65,6 @@ export default function useChapter(
     autoScrollOffset,
     useVolumeButtons,
     volumeButtonsOffset,
-    translateToIndonesian,
   } = useChapterGeneralSettings();
   const { translateChapterIfNeeded } = useTranslateChapter();
   const { incognitoMode } = useLibrarySettings();
@@ -209,10 +208,10 @@ export default function useChapter(
           chap.name,
           awaitedText,
         );
+        // Auto-translate to Indonesian (no toggle needed)
         const displayText = await translateChapterIfNeeded({
           chapterId: chap.id,
           originalHtml: sanitizedText,
-          translateEnabled: translateToIndonesian,
         });
         setChapterText(displayText);
         setAdjacentChapter([nextChap!, prevChap!]);
@@ -233,7 +232,6 @@ export default function useChapter(
       novel.path,
       novel.totalPages,
       setLoading,
-      translateToIndonesian,
       translateChapterIfNeeded,
     ],
   );

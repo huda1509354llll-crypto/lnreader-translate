@@ -1,5 +1,4 @@
 import { useCallback } from 'react';
-import { getString } from '@strings/translations';
 import {
   cacheTranslation,
   getCachedTranslation,
@@ -7,50 +6,44 @@ import {
   wrapInParagraphs,
   stripHtml,
 } from '../services/translateChapter';
-import { showToast } from '@utils/showToast';
 
-interface TranslateChapterOptions {
-  chapterId: number;
-  originalHtml: string;
-  translateEnabled: boolean;
-}
-
+/**
+ * Auto-translate hook - translates English to Indonesian automatically
+ * No settings needed, just works when reading English content
+ */
 export function useTranslateChapter() {
   const translateChapterIfNeeded = useCallback(
     async ({
       chapterId,
       originalHtml,
-      translateEnabled,
-    }: TranslateChapterOptions): Promise<string> => {
-      // Return original immediately if translation is disabled
-      if (!translateEnabled) {
-        return originalHtml;
-      }
-
-      // 1. Check cache first
+    }: {
+      chapterId: number;
+      originalHtml: string;
+    }): Promise<string> => {
+      // Check cache first
       const cached = getCachedTranslation(chapterId);
       if (cached) {
         return cached;
       }
 
-      // 2. Strip HTML and translate
+      // Strip HTML and translate
       try {
         const plainText = stripHtml(originalHtml);
         if (!plainText.trim()) {
           return originalHtml;
         }
 
-        const translatedText = await translateText(plainText);
+        // Auto-translate from English to Indonesian using Google Translate
+        const translatedText = await translateText(plainText, 'en', 'id');
         const translatedHtml = wrapInParagraphs(translatedText);
 
-        // 3. Cache the result
+        // Cache the result
         cacheTranslation(chapterId, translatedHtml);
 
         return translatedHtml;
       } catch (err) {
-        // 4. On error, fall back to original and notify the user
-        console.warn('[AutoTranslate] Translation failed:', err);
-        showToast(getString('readerScreen.bottomSheet.translationError'));
+        console.warn('[AutoTranslate] Failed:', err);
+        // On error, return original text
         return originalHtml;
       }
     },
