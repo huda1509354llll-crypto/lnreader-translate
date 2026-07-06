@@ -21,13 +21,17 @@ jobs:
       - name: Install deps
         run: pnpm install
 
-      - name: Install EAS CLI
-        run: pnpm add -g eas-cli
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Run expo prebuild
         run: npx expo prebuild --platform android --clean
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build APK (Debug)
         run: |
