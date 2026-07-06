@@ -7,6 +7,9 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '20'
+
 jobs:
   build-android:
     name: Build Android APK
@@ -16,13 +19,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -31,100 +34,65 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        continue-on-error: true
+
+      - name: Install dependencies (npm ci fallback)
+        if: failure()
         run: npm ci
 
-      - name: Build Release APK (Debug)
-        run: npx expo run:android --variant release --no-install
-        env:
-          CI: true
-
-      - name: Build with EAS
-        if: success() || failure()
-        env:
-          EAS_BUILD_CONTEXT_FILE: ${{ github.workspace }}/eas.json
-        run: |
-          # Check if eas.json exists, if not create one for local build
-          if [ ! -f eas.json ]; then
-            cat > eas.json << 'EOF'
-            {
-              "cli": {
-                "version": ">= 7.0.0"
-              },
-              "build": {
-                "development": {
-                  "developmentClient": true,
-                  "distribution": "internal"
-                },
-                "preview": {
-                  "distribution": "internal",
-                  "android": {
-                    "buildType": "apk"
-                  }
-                },
-                "production": {
-                  "android": {
-                    "buildType": "apk"
-                  }
-                }
-              }
-            }
-          EOF
-          echo "Created eas.json"
-
-      - name: Run prebuild to generate android directory
+      - name: Generate native Android project
         run: npx expo prebuild --platform android --clean
         env:
           CI: true
 
-      - name: Build Release APK with Gradle
+      - name: Install Android dependencies
+        run: cd android && ./gradlew dependencies --configuration releaseRuntimeClasspath
+        continue-on-error: true
+
+      - name: Build Release APK
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon --info 2>&1 | tail -100
         env:
           CI: true
+          JAVA_HOME: /opt/java/openjdk
 
-      - name: Upload APK artifact
+      - name: Build Debug APK
+        if: failure()
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+        env:
+          CI: true
+          JAVA_HOME: /opt/java/openjdk
+
+      - name: Find APK files
+        id: find-apk
+        run: |
+          echo "=== Release APKs ==="
+          find android -name "*.apk" -type f 2>/dev/null || echo "No release APK found"
+          echo "=== Debug APKs ==="
+          find android -name "*-debug.apk" -type f 2>/dev/null || echo "No debug APK found"
+
+      - name: Upload Release APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: android/app/build/outputs/apk/release/*.apk
           retention-days: 14
+          if-no-files-found: error
 
-      - name: Upload debug APK artifact
-        if: always()
+      - name: Upload Debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 14
-
-  build-ios:
-    name: Build iOS IPA
-    runs-on: macos-latest
-    if: false  # Disable iOS build for now, requires Apple Developer account
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Setup iOS dependencies
-        run: |
-          cd ios && pod install && cd ..
-
-      - name: Build iOS
-        run: |
-          xcodebuild -workspace ios/*.xcworkspace -scheme app -configuration Release -archivePath build/app.xcarchive archive
-
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipa
-          path: build/app.xcarchive
-          retention-days: 14
+          if-no-files-found: ignore
