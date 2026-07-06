@@ -7,29 +7,34 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        run: |
+          git clone --depth 1 https://github.com/huda1509354llll-crypto/lnreader-translate.git .
+          git fetch --tags
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'pnpm'
-
-      - name: Install pnpm
-        run: npm install -g pnpm@8
+      - name: Setup Node
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+          apt-get install -y nodejs
+          npm install -g pnpm@8
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile || pnpm install
 
       - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+        run: |
+          apt-get update && apt-get install -y openjdk-17-jdk
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        run: |
+          apt-get install -y android-sdk
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
@@ -40,10 +45,10 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon -x lint -x test
         env:
           CI: true
-          JAVA_HOME: /opt/java/openjdk
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
