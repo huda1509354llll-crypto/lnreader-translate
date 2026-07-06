@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -32,15 +32,22 @@ jobs:
 
       - name: Setup Android SDK
         run: |
-          mkdir -p $HOME/android-sdk
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          mv cmdline-tools latest
+          yes | ./latest/bin/sdkmanager --licenses || true
+          ./latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;27.1.12297006"
+        env:
+          JAVA_HOME: /opt/java/openjdk
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --clean
         env:
           CI: true
-          EXPO_TOKEN: ""
+          ANDROID_HOME: $HOME/android-sdk
+          ANDROID_SDK_ROOT: $HOME/android-sdk
 
       - name: Build Debug APK
         run: |
@@ -49,6 +56,9 @@ jobs:
           ./gradlew assembleDebug --no-daemon -x lint -x test
         env:
           CI: true
+          JAVA_HOME: /opt/java/openjdk
+          ANDROID_HOME: $HOME/android-sdk
+          ANDROID_SDK_ROOT: $HOME/android-sdk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
