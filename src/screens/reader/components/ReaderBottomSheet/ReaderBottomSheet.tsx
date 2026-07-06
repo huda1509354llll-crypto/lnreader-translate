@@ -94,6 +94,7 @@ const GeneralTab: React.FC = React.memo(() => {
       { key: 'bionicReading', label: 'bionicReading' },
       { key: 'tapToScroll', label: 'tapToScroll' },
       { key: 'keepScreenOn', label: 'keepScreenOn' },
+      { key: 'translateToIndonesian', label: 'translateToIndonesian' },
     ],
     [],
   );

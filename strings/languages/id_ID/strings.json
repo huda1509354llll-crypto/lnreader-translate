@@ -480,7 +480,9 @@
       "useChapterDrawerSwipeNavigation": "Swipe to open drawer",
       "verticalSeekbar": "Vertical seekbar",
       "keepScreenOn": "Keep screen on",
-      "volumeButtonsScroll": "Volume button scrolling"
+      "volumeButtonsScroll": "Volume button scrolling",
+      "translateToIndonesian": "Terjemahan Indonesia",
+      "translationError": "Terjemahan gagal"
     },
     "drawer": {
       "scrollToBottom": "Gulung ke bawah\n",

@@ -1,0 +1,129 @@
+name: Build Release APK
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Release APK (Debug)
+        run: npx expo run:android --variant release --no-install
+        env:
+          CI: true
+
+      - name: Build with EAS
+        if: success() || failure()
+        env:
+          EAS_BUILD_CONTEXT_FILE: ${{ github.workspace }}/eas.json
+        run: |
+          # Check if eas.json exists, if not create one for local build
+          if [ ! -f eas.json ]; then
+            cat > eas.json << 'EOF'
+            {
+              "cli": {
+                "version": ">= 7.0.0"
+              },
+              "build": {
+                "development": {
+                  "developmentClient": true,
+                  "distribution": "internal"
+                },
+                "preview": {
+                  "distribution": "internal",
+                  "android": {
+                    "buildType": "apk"
+                  }
+                },
+                "production": {
+                  "android": {
+                    "buildType": "apk"
+                  }
+                }
+              }
+            }
+          EOF
+          echo "Created eas.json"
+
+      - name: Run prebuild to generate android directory
+        run: npx expo prebuild --platform android --clean
+        env:
+          CI: true
+
+      - name: Build Release APK with Gradle
+        run: |
+          cd android
+          ./gradlew assembleRelease
+        env:
+          CI: true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 14
+
+      - name: Upload debug APK artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
+  build-ios:
+    name: Build iOS IPA
+    runs-on: macos-latest
+    if: false  # Disable iOS build for now, requires Apple Developer account
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup iOS dependencies
+        run: |
+          cd ios && pod install && cd ..
+
+      - name: Build iOS
+        run: |
+          xcodebuild -workspace ios/*.xcworkspace -scheme app -configuration Release -archivePath build/app.xcarchive archive
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: build/app.xcarchive
+          retention-days: 14

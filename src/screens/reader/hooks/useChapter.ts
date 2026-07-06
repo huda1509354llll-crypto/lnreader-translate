@@ -35,6 +35,7 @@ import { getString } from '@strings/translations';
 import NativeVolumeButtonListener from '@specs/NativeVolumeButtonListener';
 import NativeFile from '@specs/NativeFile';
 import { useNovelActions } from '@screens/novel/NovelContext';
+import { useTranslateChapter } from './useTranslateChapter';
 
 const emmiter = new NativeEventEmitter(NativeVolumeButtonListener);
 
@@ -64,7 +65,9 @@ export default function useChapter(
     autoScrollOffset,
     useVolumeButtons,
     volumeButtonsOffset,
+    translateToIndonesian,
   } = useChapterGeneralSettings();
+  const { translateChapterIfNeeded } = useTranslateChapter();
   const { incognitoMode } = useLibrarySettings();
   const [error, setError] = useState<string>();
   const { tracker } = useTracker();
@@ -200,14 +203,18 @@ export default function useChapter(
           chapterTextCache.write(chap.id, text);
         }
         setChapter(chap);
-        setChapterText(
-          sanitizeChapterText(
-            novel.pluginId,
-            novel.name,
-            chap.name,
-            awaitedText,
-          ),
+        const sanitizedText = sanitizeChapterText(
+          novel.pluginId,
+          novel.name,
+          chap.name,
+          awaitedText,
         );
+        const displayText = await translateChapterIfNeeded({
+          chapterId: chap.id,
+          originalHtml: sanitizedText,
+          translateEnabled: translateToIndonesian,
+        });
+        setChapterText(displayText);
         setAdjacentChapter([nextChap!, prevChap!]);
       } catch (e: any) {
         setError(e.message);
@@ -226,6 +233,8 @@ export default function useChapter(
       novel.path,
       novel.totalPages,
       setLoading,
+      translateToIndonesian,
+      translateChapterIfNeeded,
     ],
   );
 
