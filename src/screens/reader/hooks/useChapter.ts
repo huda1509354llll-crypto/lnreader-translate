@@ -35,6 +35,8 @@ import { getString } from '@strings/translations';
 import NativeVolumeButtonListener from '@specs/NativeVolumeButtonListener';
 import NativeFile from '@specs/NativeFile';
 import { useNovelActions } from '@screens/novel/NovelContext';
+import { autoTranslate } from './useAutoTranslate';
+import { getCachedTranslation } from '../services/translateHtml';
 
 const emmiter = new NativeEventEmitter(NativeVolumeButtonListener);
 
@@ -200,14 +202,31 @@ export default function useChapter(
           chapterTextCache.write(chap.id, text);
         }
         setChapter(chap);
-        setChapterText(
-          sanitizeChapterText(
-            novel.pluginId,
-            novel.name,
-            chap.name,
-            awaitedText,
-          ),
+        const sanitizedText = sanitizeChapterText(
+          novel.pluginId,
+          novel.name,
+          chap.name,
+          awaitedText,
         );
+
+        // Auto-translate English to Indonesian (preserving HTML structure)
+        let displayText = sanitizedText;
+        const cached = getCachedTranslation(chap.id);
+        if (cached) {
+          displayText = cached;
+        } else {
+          // Start translation in background (don't block rendering)
+          autoTranslate(chap.id, sanitizedText)
+            .then(translated => {
+              setChapterText(translated);
+            })
+            .catch(err => {
+              console.warn('[AutoTranslate] Failed:', err);
+              // Keep original on error
+            });
+        }
+
+        setChapterText(displayText);
         setAdjacentChapter([nextChap!, prevChap!]);
       } catch (e: any) {
         setError(e.message);
