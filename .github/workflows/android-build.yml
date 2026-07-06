@@ -1,4 +1,4 @@
-name: Build Release APK
+name: Build APK with EAS
 
 on:
   push:
@@ -7,64 +7,40 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
 
-      - name: Install pnpm
-        run: npm install -g pnpm@8
+      - name: Setup pnpm
+        run: npm install -g pnpm
 
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+      - name: Install deps
+        run: pnpm install
 
-      - name: Setup pnpm cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: ${{ runner.os }}-pnpm-store-
+      - name: Install EAS CLI
+        run: pnpm add -g eas-cli
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Setup Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
-
-      - name: Setup Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-
-      - name: Expo prebuild
+      - name: Run expo prebuild
         run: npx expo prebuild --platform android --clean
         env:
-          CI: true
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build Release APK
+      - name: Build APK (Debug)
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon -x lint -x test
+          ./gradlew assembleDebug
         env:
           CI: true
-          JAVA_HOME: /opt/java/openjdk
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: lnreader-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: lnreader-apk
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
